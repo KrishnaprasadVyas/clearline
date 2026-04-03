@@ -664,7 +664,7 @@ export default function ClearPathMap({
       )}
       {/* Layer controls — bottom right */}
       {mode === 'government' && mapReady && (
-        <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2">
+        <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2 max-sm:bottom-24 max-sm:right-2">
           {/* Refresh heatmap button */}
           <button
             type="button"
@@ -691,7 +691,7 @@ export default function ClearPathMap({
 
           {/* Layer panel */}
           {showLayerPanel && (
-            <div className="rounded-xl border border-white/10 bg-slate-900/90 p-3 shadow-2xl backdrop-blur-md w-52">
+            <div className="rounded-xl border border-white/10 bg-slate-900/90 p-3 shadow-2xl backdrop-blur-md w-52 max-sm:w-[min(82vw,18rem)] max-sm:max-h-[40vh] overflow-y-auto">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Map Layers</p>
               {([
                 { key: 'traffic' as const, label: 'Traffic Lines' },
@@ -716,7 +716,7 @@ export default function ClearPathMap({
       )}
 
       {selectedHospital && (
-        <div className="absolute top-4 right-4 z-30 w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl border border-sky-100 bg-white/95 p-4 shadow-2xl backdrop-blur">
+        <div className="absolute top-4 right-4 z-30 w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl border border-sky-100 bg-white/95 p-4 shadow-2xl backdrop-blur max-sm:left-2 max-sm:right-2 max-sm:top-2 max-sm:w-auto max-sm:max-h-[52vh] max-sm:overflow-y-auto">
           <button
             type="button"
             onClick={() => setSelectedHospital(null)}
@@ -725,7 +725,7 @@ export default function ClearPathMap({
           >
             ×
           </button>
-          <p className="pr-8 text-2xl font-extrabold text-slate-900">{selectedHospital.name}</p>
+          <p className="pr-8 text-2xl font-extrabold text-slate-900 max-sm:text-xl">{selectedHospital.name}</p>
           <div className="mt-5">
             <div className="mb-1 flex items-center justify-between text-sm">
               <span className="text-slate-500">Occupancy</span>
@@ -745,11 +745,11 @@ export default function ClearPathMap({
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3 text-center">
-              <p className="text-4xl font-black text-slate-900">{selectedHospital.erBeds}</p>
+              <p className="text-4xl font-black text-slate-900 max-sm:text-3xl">{selectedHospital.erBeds}</p>
               <p className="text-xs uppercase tracking-widest text-slate-500">ER Beds</p>
             </div>
             <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3 text-center">
-              <p className="text-4xl font-black text-slate-900">{selectedHospital.totalBeds}</p>
+              <p className="text-4xl font-black text-slate-900 max-sm:text-3xl">{selectedHospital.totalBeds}</p>
               <p className="text-xs uppercase tracking-widest text-slate-500">Total Beds</p>
             </div>
           </div>
@@ -766,7 +766,7 @@ export default function ClearPathMap({
             </div>
           )}
           {selectedHospital.phone && (
-            <a href={`tel:${selectedHospital.phone}`} className="mt-5 inline-flex items-center gap-2 text-3xl font-medium text-sky-500 hover:text-sky-600">
+            <a href={`tel:${selectedHospital.phone}`} className="mt-5 inline-flex items-center gap-2 text-3xl font-medium text-sky-500 hover:text-sky-600 max-sm:text-2xl">
               <span aria-hidden>📞</span>
               {selectedHospital.phone}
             </a>
