@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
     "@turf/along": "^7.3.4",
     "@turf/bearing": "^7.3.4",
     "@turf/length": "^7.3.4",
