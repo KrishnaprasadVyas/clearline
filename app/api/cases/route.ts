@@ -23,9 +23,10 @@ export async function POST(req: NextRequest) {
       userLat: number;
       userLng: number;
       city?: string;
+      imageSeverity?: 'high' | 'low';
     };
 
-    const { message, userLat, userLng, city = 'pune' } = body;
+    const { message, userLat, userLng, city = 'pune', imageSeverity } = body;
 
     if (!message || !userLat || !userLng) {
       return NextResponse.json({ error: 'message, userLat, userLng are required' }, { status: 400 });
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
       snapshots,
       null,
       triage.predictedNeeds,
+      imageSeverity,
     );
 
     if (!routeResult) {

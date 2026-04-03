@@ -11,7 +11,10 @@
     "bot:dev": "ts-node --esm --project tsconfig.json --watch scripts/runWhatsappBot.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@react-three/drei": "^10.7.7",
+    "@tensorflow-models/mobilenet": "^2.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
     "@turf/along": "^7.3.4",
     "@turf/bearing": "^7.3.4",
     "@turf/length": "^7.3.4",

@@ -2,6 +2,8 @@ import { Hospital } from './types';
 
 export const mockHospitals: Hospital[] = [
   { id: "mh-14684", name: "Arihant Heart and Surgical Hospital", city: "mumbai", latitude: 19.2240612, longitude: 72.8666469, totalBeds: 40, erBeds: 2, phone: "+91 8172747667", website: "https://mohfw.gov.in", specialties: ["general", "cardiac", "emergency"] },
+  { id: "trauma-1", name: "Pune Trauma Center Level 1", city: "pune", latitude: 18.5204, longitude: 73.8567, totalBeds: 200, erBeds: 50, phone: "+91 9876543210", website: "https://trauma.gov.in", specialties: ["trauma", "emergency", "neurosurgery", "orthopedics"] },
+  { id: "trauma-2", name: "Ruby Hall Clinic Trauma Unit", city: "pune", latitude: 18.5300, longitude: 73.8700, totalBeds: 150, erBeds: 30, phone: "+91 9876543211", website: "https://rubyhall.com", specialties: ["trauma", "cardiac", "emergency"] },
   { id: "mh-14685", name: "Banaji Eyesurgery and Laser Center", city: "mumbai", latitude: 21.2022869, longitude: 72.8712951, totalBeds: 8, erBeds: 1, phone: "+91 8632781329", website: "https://mohfw.gov.in", specialties: ["general", "ophthalmology", "ent", "emergency"] },
   { id: "mh-14687", name: "Charak Clinic Nursing Home", city: "mumbai", latitude: 18.9519338, longitude: 72.8189832, totalBeds: 20, erBeds: 1, phone: "+91 9188625780", website: "https://mohfw.gov.in", specialties: ["general", "emergency"] },
   { id: "mh-14688", name: "Dalvi Plus", city: "mumbai", latitude: 19.046295, longitude: 72.8415449, totalBeds: 60, erBeds: 7, phone: "+91 9048252257", website: "https://mohfw.gov.in", specialties: ["general", "emergency"] },

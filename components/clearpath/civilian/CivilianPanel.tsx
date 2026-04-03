@@ -20,8 +20,8 @@ interface CivilianPanelProps {
   currentRecommendation?: RouteResponse & { activeRoute?: ScoredHospital } | null;
 }
 
-type Step = 'location' | 'conversation' | 'loading' | 'result';
-const STEP_ORDER: Step[] = ['location', 'conversation', 'loading', 'result'];
+type Step = 'location' | 'scene-photo' | 'conversation' | 'loading' | 'result';
+const STEP_ORDER: Step[] = ['location', 'scene-photo', 'conversation', 'loading', 'result'];
 
 function stepIndex(s: Step) { return STEP_ORDER.indexOf(s); }
 
@@ -35,6 +35,10 @@ export default function CivilianPanel({ cityId, onRecommendation, currentRecomme
   const [routeResult, setRouteResult] = useState<RouteResponse | null>(null);
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sceneImage, setSceneImage] = useState<File | null>(null);
+  const [imageSeverity, setImageSeverity] = useState<'high' | 'low' | null>(null);
+  const [classifying, setClassifying] = useState(false);
+  const [classificationResult, setClassificationResult] = useState<{ severity: 'high' | 'low'; confidence: number; reasoning: string } | null>(null);
 
   const goTo = useCallback((next: Step) => {
     setDirection(stepIndex(next) >= stepIndex(step) ? 1 : -1);
@@ -88,6 +92,32 @@ export default function CivilianPanel({ cityId, onRecommendation, currentRecomme
     );
   }, []);
 
+  const handleScenePhotoSubmit = useCallback(async () => {
+    if (!sceneImage) return;
+    setClassifying(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('image', sceneImage);
+      const res = await fetch('/api/clearpath/classify-scene', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Classification failed');
+      const result = await res.json();
+      setImageSeverity(result.severity);
+      setClassificationResult(result);
+      goTo('conversation');
+    } catch (err) {
+      setError('Failed to classify image. Proceeding without.');
+      setImageSeverity('low');
+      setClassificationResult(null);
+      goTo('conversation');
+    } finally {
+      setClassifying(false);
+    }
+  }, [sceneImage, goTo]);
+
   const handleTriageComplete = useCallback(
     async (triage: { severity: 'critical' | 'urgent' | 'non-urgent'; reasoning: string; symptoms: { chestPain: boolean; shortnessOfBreath: boolean; fever: boolean; dizziness: boolean; freeText?: string } | null }) => {
       setTriageResult({ severity: triage.severity, reasoning: triage.reasoning });
@@ -97,6 +127,7 @@ export default function CivilianPanel({ cityId, onRecommendation, currentRecomme
       const routeBody: Record<string, unknown> = {
         severity: triage.severity,
         city: cityId,
+        imageSeverity,
         symptoms: triage.symptoms || {
           chestPain: false,
           shortnessOfBreath: false,
@@ -174,6 +205,9 @@ export default function CivilianPanel({ cityId, onRecommendation, currentRecomme
     setActiveRouteId(null);
     setUserCoords(null);
     setError(null);
+    setSceneImage(null);
+    setImageSeverity(null);
+    setClassificationResult(null);
     onRecommendation(null);
   };
 
@@ -262,14 +296,64 @@ export default function CivilianPanel({ cityId, onRecommendation, currentRecomme
                   </motion.button>
 
                   <motion.button
-                    onClick={() => goTo('conversation')}
+                    onClick={() => goTo('scene-photo')}
                     disabled={!canStart}
                     className={`w-full flex items-center justify-center px-4 py-3.5 rounded-2xl text-sm font-bold shadow-lg transition-all ${!canStart ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-blue-600/20'}`}
                     whileTap={canStart ? { scale: 0.98 } : {}}
                   >
-                    Start Triage
+                    Next: Scene Photo
                   </motion.button>
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 'scene-photo' && (
+            <motion.div key="scene-photo" custom={direction} variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.3 }}>
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Accident Scene Photo</label>
+                  <p className="text-xs text-slate-600">Upload a photo of the accident scene for automatic severity assessment.</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setSceneImage(e.target.files?.[0] || null)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all shadow-inner"
+                  />
+                  {sceneImage && (
+                    <img src={URL.createObjectURL(sceneImage)} alt="Scene preview" className="w-full h-32 object-cover rounded-lg" />
+                  )}
+                  {classificationResult && (
+                    <div className={`p-3 rounded-lg border ${classificationResult.severity === 'high' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-bold uppercase ${classificationResult.severity === 'high' ? 'text-red-600' : 'text-green-600'}`}>
+                          {classificationResult.severity === 'high' ? 'High Severity Detected' : 'Low Severity'}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {Math.round(classificationResult.confidence * 100)}% confidence
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600">{classificationResult.reasoning}</p>
+                    </div>
+                  )}
+                </div>
+
+                <motion.button
+                  onClick={handleScenePhotoSubmit}
+                  disabled={!sceneImage || classifying}
+                  className={`w-full flex items-center justify-center px-4 py-3.5 rounded-2xl text-sm font-bold shadow-lg transition-all ${!sceneImage || classifying ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-blue-600/20'}`}
+                  whileTap={sceneImage && !classifying ? { scale: 0.98 } : {}}
+                >
+                  {classifying ? 'Classifying...' : 'Analyze & Continue'}
+                </motion.button>
+
+                <motion.button
+                  onClick={() => { setImageSeverity('low'); setClassificationResult(null); goTo('conversation'); }}
+                  className="w-full flex items-center justify-center px-4 py-3 bg-white border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 rounded-2xl text-sm font-bold shadow-sm transition-colors"
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Skip Photo
+                </motion.button>
               </div>
             </motion.div>
           )}

@@ -73,6 +73,7 @@ export interface RouteRequest {
   severity: 'critical' | 'urgent' | 'non-urgent';
   city: string;
   symptoms?: SymptomsPayload;
+  imageSeverity?: 'high' | 'low';
 }
 
 export interface ScoredHospital {

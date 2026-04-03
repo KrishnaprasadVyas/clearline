@@ -92,6 +92,7 @@ export class WhatsappBot {
   sessions = new Map<string, {
     step: 'idle' | 'awaiting_location';
     distressMessage?: string;
+    imageSeverity?: 'high' | 'low';
   }>();
 
   /** Reverse-geocode lat/lng → city slug using Mapbox. Falls back to 'pune'. */
@@ -178,6 +179,7 @@ export class WhatsappBot {
           userLat: loc.latitude,
           userLng: loc.longitude,
           city,
+          imageSeverity: session.imageSeverity,
         }),
       });
 
@@ -257,6 +259,12 @@ export class WhatsappBot {
         return;
       }
 
+      // For images, attempt classification
+      if (message.type === 'image') {
+        await this.handleImageClassification(message, media);
+        return;
+      }
+
       await message.reply('Media received. Processing not implemented yet.');
 
       if (media && media.data) {
@@ -269,6 +277,53 @@ export class WhatsappBot {
     } catch (err) {
       console.error('[WA] handleMedia error', err);
       await message.reply('Media handling failed.');
+    }
+  }
+
+  async handleImageClassification(message: any, media: any) {
+    try {
+      const from = message.from;
+      await message.reply('🔍 Analyzing accident scene image for trauma severity...');
+
+      // Send to classification API
+      const baseUrl = process.env.BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+      const formData = new FormData();
+      formData.append('image', new Blob([Buffer.from(media.data, 'base64')], { type: media.mimetype }), 'scene.jpg');
+
+      const response = await fetch(`${baseUrl}/api/clearpath/classify-scene`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        await message.reply('❌ Failed to analyze image. Please try again or describe the scene.');
+        return;
+      }
+
+      const { severity, confidence, reasoning } = await response.json();
+
+      // Update session with severity
+      const session = this.sessions.get(from) || { step: 'idle' };
+      session.imageSeverity = severity;
+      this.sessions.set(from, session);
+
+      const severityEmoji = severity === 'high' ? '🚨' : '✅';
+      const reply = `${severityEmoji} *Scene Severity: ${severity.toUpperCase()}*\n\n` +
+        `Confidence: ${(confidence * 100).toFixed(0)}%\n` +
+        `Assessment: ${reasoning}\n\n` +
+        `${severity === 'high' ? '⚠️ High severity detected. Routing to Level 1 Trauma Center.' : 'Standard routing will be used.'}\n\n` +
+        'Please describe symptoms or send location for routing.';
+
+      await message.reply(reply);
+
+      // Save image
+      const filename = `./tmp/whatsapp-scene-${Date.now()}.jpg`;
+      await fs.mkdir('./tmp', { recursive: true });
+      await fs.writeFile(filename, Buffer.from(media.data, 'base64'));
+      console.log('[WA] Scene image saved to', filename);
+    } catch (error) {
+      console.error('[WA] Image classification error:', error);
+      await message.reply('❌ Image analysis failed. Please describe the scene or try again.');
     }
   }
 

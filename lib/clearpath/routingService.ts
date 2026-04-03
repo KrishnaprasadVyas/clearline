@@ -72,19 +72,32 @@ export async function scoreAndRankHospitals(
   snapshots: any[],
   symptoms?: SymptomsPayload | null,
   predictedNeeds?: string[],
+  imageSeverity?: 'high' | 'low',
 ): Promise<{ recommended: ScoredHospital; alternatives: ScoredHospital[] } | null> {
   if (!hospitals.length) return null;
 
+  // If image indicates high severity, force critical and filter to trauma centers
+  let effectiveSeverity = severity;
+  let filteredHospitals = hospitals;
+  if (imageSeverity === 'high') {
+    effectiveSeverity = 'critical';
+    filteredHospitals = hospitals.filter(h => h.specialties?.includes('trauma'));
+    if (filteredHospitals.length === 0) {
+      // Fallback to all if no trauma centers
+      filteredHospitals = hospitals;
+    }
+  }
+
   // For critical/urgent, drop clinics that are too small to handle real emergencies
-  const minErBeds = severity === 'critical' ? 3 : severity === 'urgent' ? 2 : 0;
+  const minErBeds = effectiveSeverity === 'critical' ? 3 : effectiveSeverity === 'urgent' ? 2 : 0;
   const capable = minErBeds > 0
-    ? hospitals.filter((h) => (h.erBeds ?? 0) >= minErBeds)
-    : hospitals;
+    ? filteredHospitals.filter((h) => (h.erBeds ?? 0) >= minErBeds)
+    : filteredHospitals;
   // Safety net: if filtering leaves nothing, fall back to all hospitals
-  const pool = capable.length >= 3 ? capable : hospitals;
+  const pool = capable.length >= 3 ? capable : filteredHospitals;
 
   const now = new Date();
-  const weights = WEIGHTS[severity] ?? WEIGHTS['non-urgent'];
+  const weights = WEIGHTS[effectiveSeverity] ?? WEIGHTS['non-urgent'];
   const context = getTemporalContext(now);
 
   // Build congestion lookup
