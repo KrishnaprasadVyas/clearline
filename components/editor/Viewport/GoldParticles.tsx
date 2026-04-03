@@ -137,18 +137,8 @@ export function GoldParticles({
   return (
     <points ref={pointsRef} position={position}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particleCount}
-          array={positions}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-size"
-          count={particleCount}
-          array={sizes}
-          itemSize={1}
-        />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-size" args={[sizes, 1]} />
       </bufferGeometry>
       <pointsMaterial
         size={PARTICLE_CONFIG.RISING.SIZE}
@@ -248,18 +238,8 @@ export function GoldSparkles({
   return (
     <points ref={pointsRef} position={position}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particleCount}
-          array={positions}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-size"
-          count={particleCount}
-          array={sizes}
-          itemSize={1}
-        />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-size" args={[sizes, 1]} />
       </bufferGeometry>
       <pointsMaterial
         size={PARTICLE_CONFIG.SPARKLE.SIZE}
@@ -333,12 +313,7 @@ export function GoldOrbit({
   return (
     <points ref={pointsRef} position={position}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particleCount}
-          array={positions}
-          itemSize={3}
-        />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
         size={PARTICLE_CONFIG.ORBIT.SIZE}
@@ -418,12 +393,7 @@ export function GoldBurst({ position, onComplete }: GoldBurstProps) {
   return (
     <points ref={pointsRef} position={position}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={particleCount}
-          array={positions}
-          itemSize={3}
-        />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
         size={PARTICLE_CONFIG.BURST.SIZE}
