@@ -18,7 +18,7 @@ const SYMPTOM_SPECIALTY_MAP: Record<string, string[]> = {
   severeHeadache: ['neurology', 'stroke'],
 };
 
-function getSpecialtyScore(hospital: any, symptoms?: SymptomsPayload): { score: number; match: boolean } {
+function getSpecialtyScore(hospital: any, symptoms?: SymptomsPayload | null): { score: number; match: boolean } {
   if (!symptoms) return { score: 0, match: false };
 
   const needed: string[] = [];
@@ -40,7 +40,7 @@ export async function scoreAndRankHospitals(
   severity: string,
   hospitals: any[],
   snapshots: any[],
-  symptoms?: SymptomsPayload
+  symptoms?: SymptomsPayload | null
 ): Promise<{ recommended: ScoredHospital; alternatives: ScoredHospital[] } | null> {
   if (!hospitals.length) return null;
 

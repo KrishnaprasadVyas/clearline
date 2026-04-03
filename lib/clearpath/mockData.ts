@@ -4174,7 +4174,7 @@ export const mockHospitals: Hospital[] = [
 ];
 
 export const mockCongestion: CongestionSnapshot[] = mockHospitals.map(h => ({
-  hospitalId: h.id,
+  hospitalId: h.id!,
   occupancyPct: Math.round(Math.random() * 40 + 50),
   waitMinutes: Math.floor(Math.random() * 180 + 60),
   recordedAt: new Date()

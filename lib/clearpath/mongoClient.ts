@@ -3,28 +3,31 @@ import { MongoClient } from 'mongodb';
 const uri = process.env.MONGODB_URI;
 const options = {};
 
-let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
+let clientPromise: Promise<MongoClient> | undefined;
 
-if (uri) {
+function getClientPromise(): Promise<MongoClient> {
+  if (!uri) throw new Error('MONGODB_URI is not set');
+  if (clientPromise) return clientPromise;
+
   if (process.env.NODE_ENV === 'development') {
     if (!(global as any)._mongoClientPromise) {
-      client = new MongoClient(uri, options);
+      const client = new MongoClient(uri, options);
       (global as any)._mongoClientPromise = client.connect();
     }
-    clientPromise = (global as any)._mongoClientPromise;
-  } else {
-    client = new MongoClient(uri, options);
-    clientPromise = client.connect();
+    clientPromise = (global as any)._mongoClientPromise as Promise<MongoClient>;
+    return clientPromise;
   }
-} else {
-  clientPromise = Promise.reject(new Error('MONGODB_URI is not set'));
+
+  const client = new MongoClient(uri, options);
+  clientPromise = client.connect();
+  return clientPromise;
 }
 
-export default clientPromise;
+// Kept for backward-compatibility with any default import usages.
+// We intentionally do not initialize Mongo at module import time.
+export default Promise.resolve(null as unknown as MongoClient);
 
 export async function getDb() {
-  if (!uri) throw new Error('MONGODB_URI is not set');
-  const client = await clientPromise;
+  const client = await getClientPromise();
   return client.db('clearpath');
 }
