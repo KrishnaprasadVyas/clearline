@@ -9,31 +9,31 @@ export interface TextureInfo {
 
 // Predefined textures
 export const WALL_TEXTURES: TextureInfo[] = [
-  { name: 'brick', displayName: 'Brick', path: '/textures/walls/brick.jpeg', category: 'wall' },
-  { name: 'concrete', displayName: 'Concrete', path: '/textures/walls/concrete.jpg', category: 'wall' },
-  { name: 'stucco', displayName: 'Stucco', path: '/textures/walls/stucco.jpg', category: 'wall' },
-  { name: 'wood', displayName: 'Wood', path: '/textures/walls/wood.jpg', category: 'wall' },
-  { name: 'wood2', displayName: 'Wood Panel', path: '/textures/walls/wood2.jpg', category: 'wall' },
-  { name: 'ceramic', displayName: 'Ceramic', path: '/textures/walls/ceramic.jpg', category: 'wall' },
-  { name: 'gold', displayName: 'Gold', path: '/textures/walls/gold.jpg', category: 'wall' },
-  { name: 'terrazzo', displayName: 'Terrazzo', path: '/textures/walls/terrazzo.png', category: 'wall' },
+  { name: 'brick', displayName: 'Brick', path: '/assets/mat/red_block.jpeg', category: 'wall' },
+  { name: 'concrete', displayName: 'Concrete', path: '/assets/mat/grey_solid.jpg', category: 'wall' },
+  { name: 'stucco', displayName: 'Stucco', path: '/assets/mat/rough_plaster.jpg', category: 'wall' },
+  { name: 'wood', displayName: 'Wood', path: '/assets/mat/timber_plank.jpg', category: 'wall' },
+  { name: 'wood2', displayName: 'Wood Panel', path: '/assets/mat/timber_panel.jpg', category: 'wall' },
+  { name: 'ceramic', displayName: 'Ceramic', path: '/assets/mat/white_tile.jpg', category: 'wall' },
+  { name: 'gold', displayName: 'Gold', path: '/assets/mat/yellow_metal.jpg', category: 'wall' },
+  { name: 'terrazzo', displayName: 'Terrazzo', path: '/assets/mat/speckled_floor.png', category: 'wall' },
 ];
 
 export const ROOF_TEXTURES: TextureInfo[] = [
-  { name: 'shingle', displayName: 'Shingles', path: '/textures/roofs/shingle.jpg', category: 'roof' },
-  { name: 'metal', displayName: 'Metal', path: '/textures/roofs/metal.jpg', category: 'roof' },
-  { name: 'tile', displayName: 'Tile', path: '/textures/roofs/tile.jpg', category: 'roof' },
-  { name: 'green-roof', displayName: 'Green Roof', path: '/textures/roofs/green-roof.jpg', category: 'roof' },
+  { name: 'shingle', displayName: 'Shingles', path: '/assets/mat/roof_shingle.jpg', category: 'roof' },
+  { name: 'metal', displayName: 'Metal', path: '/assets/mat/roof_metal.jpg', category: 'roof' },
+  { name: 'tile', displayName: 'Tile', path: '/assets/mat/roof_tile.jpg', category: 'roof' },
+  { name: 'green-roof', displayName: 'Green Roof', path: '/assets/mat/roof_green.jpg', category: 'roof' },
 ];
 
 export const GROUND_TEXTURES: TextureInfo[] = [
-  { name: 'grass', displayName: 'Grass', path: '/textures/ground/grass.jpg', category: 'ground' },
-  { name: 'asphalt', displayName: 'Asphalt', path: '/textures/ground/asphalt.jpg', category: 'ground' },
+  { name: 'grass', displayName: 'Grass', path: '/assets/mat/floor_grass.jpg', category: 'ground' },
+  { name: 'asphalt', displayName: 'Asphalt', path: '/assets/mat/floor_asphalt.jpg', category: 'ground' },
 ];
 
 export const WINDOW_TEXTURES: TextureInfo[] = [
   { name: 'clear', displayName: 'Clear Glass', path: '', category: 'window' },
-  { name: 'glass', displayName: 'Glass', path: '/textures/walls/glass.jpg', category: 'window' },
+  { name: 'glass', displayName: 'Glass', path: '/assets/mat/window_glass.jpg', category: 'window' },
 ];
 
 // Texture cache to avoid reloading

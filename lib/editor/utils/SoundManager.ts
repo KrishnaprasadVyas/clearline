@@ -10,15 +10,15 @@ export type BuildingSoundName =
   | 'window_add';
 
 const SOUND_FILES: Record<BuildingSoundName, string> = {
-  brick_place: '/sounds/building/brick_place.mp3',
-  rotate_object: '/sounds/building/rotate_object.mp3',
-  move_object: '/sounds/building/move_object.mp3',
-  place_object: '/sounds/building/place_object.mp3',
-  resize_object: '/sounds/building/resize_object.mp3',
-  add_floor: '/sounds/building/add_floor.mp3',
-  change_texture: '/sounds/building/change_texture.mp3',
-  window_edit: '/sounds/building/window_edit.mp3',
-  window_add: '/sounds/building/window_add.mp3',
+  brick_place: '/assets/sfx/action_place1.mp3',
+  rotate_object: '/assets/sfx/action_spin.mp3',
+  move_object: '/assets/sfx/action_move.mp3',
+  place_object: '/assets/sfx/action_place2.mp3',
+  resize_object: '/assets/sfx/action_scale.mp3',
+  add_floor: '/assets/sfx/action_add_layer.mp3',
+  change_texture: '/assets/sfx/action_paint.mp3',
+  window_edit: '/assets/sfx/action_window_mod.mp3',
+  window_add: '/assets/sfx/action_window_new.mp3',
 };
 
 // Cooldown per sound to prevent spam (ms)
