@@ -26,8 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const c = await readCase(id);
     if (!c) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
 
-    const hospitalId = c.assignedHospital?.hospital?.id;
-    const hospitalName = c.assignedHospital?.hospital?.name;
+    const ah = c.assignedHospital as any;
+    const hospitalId = ah?.hospital?.id;
+    const hospitalName = ah?.hospital?.name;
     if (!hospitalId) {
       return NextResponse.json({ error: 'Assigned hospital is missing' }, { status: 400 });
     }
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         severity: c.triage?.severity,
         predictedNeeds: c.triage?.predictedNeeds,
         patientMessage: c.patientMessage,
-        etaMinutes: c.assignedHospital?.totalEstimatedMinutes,
+        etaMinutes: ah?.totalEstimatedMinutes,
         location: c.userLocation,
       },
     });

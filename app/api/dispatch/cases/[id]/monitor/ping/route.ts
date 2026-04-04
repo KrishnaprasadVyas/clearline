@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let coordinationChannel: 'traffic' | 'police_and_traffic' | null = null;
 
     if (monitor.closureDetected) {
-      const fallback = Array.isArray(currentCase.alternatives) ? currentCase.alternatives[0] : null;
+      const fallback = Array.isArray(currentCase.alternatives) ? (currentCase.alternatives as any[])[0] : null;
       if (fallback) {
         const success = await overrideAssignedHospital(
           id,

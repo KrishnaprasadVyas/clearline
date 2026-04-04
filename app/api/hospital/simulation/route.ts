@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'scenario is required' }, { status: 400 });
     }
 
-    const liveCases = await readLiveCases();
+    const liveCases = (await readLiveCases()) as unknown as SimCase[];
 
     if (scenario === 'closure_reroute' || scenario === 'obstacle_reroute') {
       const target = pickCaseByIdOrFirst(liveCases, caseId, 'en_route');
@@ -322,7 +322,7 @@ export async function POST(req: NextRequest) {
 
       const incident = await createExternalIncident({
         type: 'road_closure',
-        city: target.city || 'pune',
+        city: (target as any).city || 'pune',
         caseId: target.caseId,
         description: 'External feed: arterial road closure near active ambulance corridor',
         source: 'simulation',

@@ -2,25 +2,12 @@
 
 import { useState } from 'react';
 import type { EmergencyCase } from '@/lib/clearpath/caseTypes';
-import type { RoutingConstraints, ScoredHospital } from '@/lib/clearpath/types';
+import type { ScoredHospital } from '@/lib/clearpath/types';
 
-type MonitorEvent = {
-  type: 'closure_detected' | 'reroute_alert' | 'coordination_triggered' | 'triage_escalated';
-  caseId: string;
-  ts: number;
-  reason: string;
-  etaDriftMinutes?: number;
-  coordination?: {
-    channel: 'traffic' | 'police_and_traffic';
-    severity: 'critical' | 'urgent' | 'non-urgent';
-    baselineEtaMinutes?: number;
-    currentEtaMinutes?: number;
-  };
-  triageEscalation?: {
-    severity: 'critical' | 'urgent' | 'non-urgent';
-    confidenceScore: number;
-    escalationLevel: 'dispatch_supervisor' | 'medical_director';
-  };
+type CongestionSnapshot = {
+  hospitalId?: string;
+  waitMinutes?: number;
+  occupancyPct?: number;
 };
 
 type HospitalSnapshot = {
@@ -31,70 +18,31 @@ type HospitalSnapshot = {
   specialties?: string[];
 };
 
-type CongestionSnapshot = {
-  hospitalId?: string;
-  waitMinutes?: number;
-  occupancyPct?: number;
-};
-
-type MonitorPingResult = {
-  rerouted?: boolean;
-  rerouteHospitalName?: string | null;
-  closureDetected?: boolean;
-  reason?: string;
-};
-
 interface DispatchSidebarProps {
   cases: EmergencyCase[];
   hospitals: HospitalSnapshot[];
   congestion: CongestionSnapshot[];
-  constraints: RoutingConstraints;
-  onConstraintsChange: (next: RoutingConstraints) => void;
-  routeOptions: { recommended: ScoredHospital; alternatives: ScoredHospital[] } | null;
-  routeOptionsLoading?: boolean;
   selectedCaseId?: string | null;
-  monitorEvents?: MonitorEvent[];
   onCaseSelect: (c: EmergencyCase | null) => void;
   onOverrideSubmit: (caseId: string, newHospital: ScoredHospital) => Promise<void>;
-  onHospitalAck: (caseId: string, hospitalId: string) => Promise<void>;
-  onHospitalReject: (caseId: string, hospitalId: string) => Promise<void>;
-  onMonitorPing: (
-    caseId: string,
-    baselineEtaMinutes?: number,
-    currentEtaMinutes?: number,
-    roadClosureReported?: boolean,
-  ) => Promise<MonitorPingResult>;
 }
 
 export default function DispatchSidebar({
   cases,
   hospitals,
   congestion,
-  constraints,
-  onConstraintsChange,
-  routeOptions,
-  routeOptionsLoading,
   selectedCaseId,
-  monitorEvents,
   onCaseSelect,
   onOverrideSubmit,
-  onHospitalAck,
-  onHospitalReject,
-  onMonitorPing,
 }: DispatchSidebarProps) {
   const [isOverriding, setIsOverriding] = useState(false);
-  const [baselineEta, setBaselineEta] = useState(18);
-  const [currentEta, setCurrentEta] = useState(18);
-  const [roadClosure, setRoadClosure] = useState(false);
-  const [monitorBusy, setMonitorBusy] = useState(false);
-  const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
 
   const selectedCase = cases.find(c => c.caseId === selectedCaseId);
 
-  // Helper to extract rich bed info for a given hospital ID
-  function getHospitalInfo(hospId: string) {
-    const h = hospitals.find((x) => x.id === hospId || x._id?.toString() === hospId);
-    const c = congestion.find((x) => x.hospitalId === hospId);
+  function getHospitalInfo(hospId?: string) {
+    if (!hospId) return null;
+    const h = hospitals.find(x => x.id === hospId || x._id?.toString() === hospId);
+    const c = congestion.find(x => x.hospitalId === hospId);
     if (!h) return null;
     const occ = c?.occupancyPct ?? 0;
     const totalBeds = h.totalBeds ?? 100;
@@ -102,490 +50,203 @@ export default function DispatchSidebar({
     return {
       occupancyPct: occ,
       waitMinutes: c?.waitMinutes ?? 0,
-      totalBeds,
-      erBeds,
       availableTotal: Math.max(0, Math.floor(totalBeds * ((100 - occ) / 100))),
       availableER: Math.max(0, Math.floor(erBeds * ((100 - occ) / 100))),
-      specialties: h.specialties ?? []
     };
   }
 
-  async function handleSimulateMCI() {
-    setIsOverriding(true);
-    try {
-      const highwayCluster = [
-        { message: "Multi-vehicle pileup. Severe head trauma, unconscious.", userLat: 18.5028, userLng: 73.8116 },
-        { message: "Car crushed, driver has major burns and cannot breathe.", userLat: 18.5034, userLng: 73.8121 },
-        { message: "Pedestrian hit by debris, massive bleeding from leg.", userLat: 18.5022, userLng: 73.8111 },
-        { message: "Chest pain and struggling to breathe at crash site.", userLat: 18.5038, userLng: 73.8130 },
-      ];
-      
-      const res = await fetch('/api/dispatch/cases/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cases: highwayCluster,
-          massCasualtyMode: constraints.massCasualtyMode !== false,
-        })
-      });
-      
-      if (res.ok) {
-         // Auto-refresh cases via page mutation logic if we had access here, 
-         // but wait, SWR polls every 3 seconds anyway, so the new cases will appear automatically!
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsOverriding(false);
-    }
-  }
-
-  const visibleAlternatives: ScoredHospital[] = routeOptions?.alternatives ?? (selectedCase?.alternatives as ScoredHospital[] ?? []);
-  const recommendedOption = routeOptions?.recommended ?? null;
-  const activeMonitorEvents = (monitorEvents ?? []).filter((e) => !selectedCaseId || e.caseId === selectedCaseId).slice(0, 3);
-
-  const scoreRows = selectedCase?.assignedHospital?.scoreBreakdown
-    ? [
-        ['Drive', selectedCase.assignedHospital.scoreBreakdown.driveComponent],
-        ['Wait', selectedCase.assignedHospital.scoreBreakdown.waitComponent],
-        ['Occupancy', selectedCase.assignedHospital.scoreBreakdown.occupancyComponent],
-        ['Specialty', selectedCase.assignedHospital.scoreBreakdown.specialtyComponent],
-        ['Equipment', selectedCase.assignedHospital.scoreBreakdown.equipmentComponent],
-        ['Mass-casualty', selectedCase.assignedHospital.scoreBreakdown.massCasualtyComponent],
-      ]
-    : [];
-
-  function ackBadge(ackStatus?: string) {
-    if (ackStatus === 'acknowledged') {
-      return 'bg-emerald-100 text-emerald-700 border-emerald-300';
-    }
-    if (ackStatus === 'rejected') {
-      return 'bg-red-100 text-red-700 border-red-300';
-    }
-    return 'bg-amber-100 text-amber-700 border-amber-300';
-  }
-
-  function ackLabel(ackStatus?: string) {
-    if (ackStatus === 'acknowledged') return 'ACK';
-    if (ackStatus === 'rejected') return 'REJECTED';
-    return 'PENDING ACK';
-  }
+  const SEVERITY_COLOR: Record<string, string> = {
+    critical: 'bg-red-100 text-red-700',
+    urgent: 'bg-orange-100 text-orange-700',
+    'non-urgent': 'bg-green-100 text-green-700',
+  };
 
   return (
-    <div className="civ-panel h-[calc(100vh-2rem)] w-full sm:w-[380px] pointer-events-auto flex flex-col">
-      <div className="civ-header !mb-3 flex justify-between items-center pr-2">
-        <div className="flex items-center gap-2">
-          <div className="civ-header-icon" aria-hidden>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <path d="M12 18v-6"/>
-              <path d="M9 15h6"/>
-            </svg>
-          </div>
-          <div>
-            <h2 className="civ-header-title">Live Dispatch</h2>
-            <p className="civ-header-sub">{cases.length} Active Cases</p>
-          </div>
+    <div className="civ-panel h-[calc(100vh-2rem)] w-[360px] pointer-events-auto flex flex-col">
+
+      {/* Header */}
+      <div className="civ-header !mb-4 flex items-center justify-between pr-1">
+        <div>
+          <h2 className="civ-header-title">Live Dispatch</h2>
+          <p className="civ-header-sub">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
+            {cases.length} active {cases.length === 1 ? 'case' : 'cases'}
+          </p>
         </div>
-        
-        <button 
-          onClick={handleSimulateMCI}
-          disabled={isOverriding}
-          className="text-[0.65rem] uppercase tracking-wider font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300 px-2 py-1.5 rounded-lg transition-transform active:scale-95 flex items-center gap-1 shadow-sm"
-        >
-          {isOverriding ? 'Routing...' : '⚠️ Simulate MCI'}
-        </button>
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3">
-        <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-500 mb-2">Constraint Filters</p>
-        <div className="grid grid-cols-2 gap-2 text-[0.7rem]">
-          <label className="flex items-center gap-1.5 text-slate-700 font-semibold">
-            <input
-              type="checkbox"
-              checked={Boolean(constraints.requireVentilator)}
-              onChange={(e) => onConstraintsChange({ ...constraints, requireVentilator: e.target.checked })}
-            />
-            Ventilator
-          </label>
-          <label className="flex items-center gap-1.5 text-slate-700 font-semibold">
-            <input
-              type="checkbox"
-              checked={Boolean(constraints.requireIcu)}
-              onChange={(e) => onConstraintsChange({ ...constraints, requireIcu: e.target.checked })}
-            />
-            ICU
-          </label>
-          <label className="flex items-center gap-1.5 text-slate-700 font-semibold">
-            <input
-              type="checkbox"
-              checked={Boolean(constraints.requireCardiacSpecialist)}
-              onChange={(e) => onConstraintsChange({ ...constraints, requireCardiacSpecialist: e.target.checked })}
-            />
-            Cardiac
-          </label>
-          <label className="flex items-center gap-1.5 text-slate-700 font-semibold">
-            <input
-              type="checkbox"
-              checked={Boolean(constraints.requireNeurosurgeon)}
-              onChange={(e) => onConstraintsChange({ ...constraints, requireNeurosurgeon: e.target.checked })}
-            />
-            Neurosurgeon
-          </label>
-        </div>
+      {/* Case list / Case detail */}
+      <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 pb-6">
 
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-[0.65rem] text-slate-500 font-bold uppercase tracking-wider mb-1">
-            <span>Max Occupancy</span>
-            <span>{constraints.maxOccupancyPct ?? 95}%</span>
-          </div>
-          <input
-            type="range"
-            min={50}
-            max={100}
-            step={5}
-            value={constraints.maxOccupancyPct ?? 95}
-            onChange={(e) => onConstraintsChange({ ...constraints, maxOccupancyPct: Number(e.target.value) })}
-            className="w-full"
-          />
-        </div>
-
-        <label className="mt-2 flex items-center gap-2 text-[0.72rem] font-bold uppercase tracking-wider text-amber-700">
-          <input
-            type="checkbox"
-            checked={constraints.massCasualtyMode !== false}
-            onChange={(e) => onConstraintsChange({ ...constraints, massCasualtyMode: e.target.checked })}
-          />
-          Mass Casualty Mode
-        </label>
-      </div>
-
-      {activeMonitorEvents.length > 0 && (
-        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3">
-          <p className="text-[0.62rem] font-bold uppercase tracking-widest text-rose-700 mb-2">Live Route Monitor</p>
-          <div className="flex flex-col gap-2">
-            {activeMonitorEvents.map((event, idx) => (
-              <div key={`${event.caseId}-${event.ts}-${idx}`} className="rounded-lg border border-rose-200 bg-white px-2 py-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[0.65rem] font-black uppercase tracking-wider text-rose-700">
-                    {event.type === 'closure_detected'
-                      ? 'Closure Detected'
-                      : event.type === 'triage_escalated'
-                        ? 'Triage Escalated'
-                      : event.type === 'coordination_triggered'
-                        ? 'Coordination Triggered'
-                        : 'Reroute Alert'}
-                  </span>
-                  <span className="text-[0.62rem] text-slate-500 font-semibold">{event.caseId}</span>
-                </div>
-                <p className="text-[0.7rem] text-slate-700 mt-1">{event.reason}</p>
-                {event.type === 'coordination_triggered' && event.coordination && (
-                  <p className="text-[0.62rem] text-rose-700 font-semibold mt-1">
-                    Channel: {event.coordination.channel.replaceAll('_', ' ')}
-                  </p>
-                )}
-                {event.type === 'triage_escalated' && event.triageEscalation && (
-                  <p className="text-[0.62rem] text-rose-700 font-semibold mt-1">
-                    Escalation: {event.triageEscalation.escalationLevel.replaceAll('_', ' ')} ({event.triageEscalation.confidenceScore})
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto pr-2 pb-10 flex flex-col gap-3">
+        {/* ── CASE DETAIL VIEW ── */}
         {selectedCase ? (
-          <div>
-            <button onClick={() => onCaseSelect(null)} className="text-[0.75rem] font-bold text-sky-600 uppercase tracking-widest flex items-center gap-1 mb-4 hover:text-sky-800 transition-colors">
-              &larr; Back to List
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => onCaseSelect(null)}
+              className="text-[0.72rem] font-bold text-sky-600 uppercase tracking-widest flex items-center gap-1 hover:text-sky-800 transition-colors"
+            >
+              ← All Cases
             </button>
-            
-            <div className="mb-4">
-              <span className={`civ-badge ${selectedCase.triage.severity === 'critical' ? 'civ-badge--purple bg-red-100 text-red-700' : 'civ-badge--sky'}`}>
-                {selectedCase.triage.severity} 
+
+            {/* Severity + Case ID */}
+            <div className="flex items-center gap-2">
+              <span className={`civ-badge ${SEVERITY_COLOR[selectedCase.triage.severity] ?? 'bg-slate-100 text-slate-600'}`}>
+                {selectedCase.triage.severity}
               </span>
               {selectedCase.incidentId && (
-                <span className="ml-2 civ-badge bg-amber-100 text-amber-800 border-amber-300">
+                <span className="civ-badge bg-amber-100 text-amber-800">
                   {selectedCase.incidentId}
                 </span>
               )}
-              <span className={`ml-2 civ-badge border ${ackBadge(selectedCase.hospitalAck?.status)}`}>
-                {ackLabel(selectedCase.hospitalAck?.status)}
+              <span className="ml-auto text-[0.68rem] text-slate-400 font-medium">
+                {new Date(selectedCase.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
-              {selectedCase.assignedHospital?.sceneSeverityOverride && (
-                <span className="ml-2 civ-badge bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300">
-                  Scene Override
-                </span>
-              )}
-              <h3 className="text-xl font-bold text-slate-800 tracking-tight mt-1">{selectedCase.caseId}</h3>
-              
-              {/* Assigned Details Box */}
-              <div className="mt-3 bg-white p-3 rounded-xl border border-sky-200 shadow-sm border-b-4 border-b-sky-400">
-                <p className="text-[0.8rem] text-slate-500 font-medium uppercase tracking-widest mb-1">Target Hospital</p>
-                <p className="font-bold text-slate-800">{selectedCase.assignedHospital?.hospital?.name}</p>
-                
-                {(() => {
-                  const assignedHospitalId = selectedCase.assignedHospital?.hospital?.id;
-                  const info = getHospitalInfo(assignedHospitalId);
-                  if (!info) return null;
-                  return (
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-[0.7rem]">
-                      <div className="bg-slate-50 p-1.5 rounded flex flex-col">
-                        <span className="text-slate-400 uppercase tracking-wider font-bold text-[0.6rem]">Occupancy</span>
-                        <span className={`font-bold ${info.occupancyPct > 80 ? 'text-red-600' : 'text-sky-700'}`}>{Math.round(info.occupancyPct)}% (Wait: {info.waitMinutes}m)</span>
-                      </div>
-                      <div className="bg-slate-50 p-1.5 rounded flex flex-col">
-                        <span className="text-slate-400 uppercase tracking-wider font-bold text-[0.6rem]">Available Beds</span>
-                        <span className="font-bold text-slate-700">ER: {info.availableER} | Gen: {info.availableTotal}</span>
-                      </div>
-                      <div className="col-span-2 flex items-center gap-2 mt-1">
-                        <button
-                          onClick={async () => {
-                            if (!assignedHospitalId) return;
-                            setIsOverriding(true);
-                            await onHospitalAck(selectedCase.caseId, assignedHospitalId);
-                            setIsOverriding(false);
-                          }}
-                          disabled={isOverriding || !assignedHospitalId}
-                          className="flex-1 text-[0.68rem] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 px-2 py-1 rounded-md border border-emerald-300"
-                        >
-                          Mark ACK
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (!assignedHospitalId) return;
-                            setIsOverriding(true);
-                            await onHospitalReject(selectedCase.caseId, assignedHospitalId);
-                            setIsOverriding(false);
-                          }}
-                          disabled={isOverriding || !assignedHospitalId}
-                          className="flex-1 text-[0.68rem] font-bold bg-red-100 hover:bg-red-200 text-red-900 px-2 py-1 rounded-md border border-red-300"
-                        >
-                          Mark Reject
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4">
-              <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400 mb-1">Reasoning</p>
-              <p className="text-sm text-slate-700 italic">&quot;{selectedCase.triage.reasoning}&quot;</p>
-              {selectedCase.triage.predictedNeeds?.length > 0 && (
+            <h3 className="text-lg font-black text-slate-800 tracking-tight -mt-1">
+              {selectedCase.caseId}
+            </h3>
+
+            {/* Patient message */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 italic">
+              &ldquo;{selectedCase.patientMessage}&rdquo;
+            </div>
+
+            {/* Assigned hospital */}
+            {(() => {
+              const hospId = selectedCase.assignedHospital?.hospital?.id;
+              const info = getHospitalInfo(hospId);
+              return (
+                <div className="bg-white border border-sky-200 border-b-4 border-b-sky-400 rounded-xl p-3 shadow-sm">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400 mb-1">Routed to</p>
+                  <p className="font-bold text-slate-800 text-base">{selectedCase.assignedHospital?.hospital?.name}</p>
+                  <p className="text-[0.72rem] text-sky-700 font-bold mt-0.5">
+                    {selectedCase.assignedHospital?.totalEstimatedMinutes} min ETA
+                  </p>
+                  {info && (
+                    <div className="mt-2 flex gap-2 text-[0.68rem]">
+                      <span className={`px-2 py-0.5 rounded-full font-bold ${info.occupancyPct > 80 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {Math.round(info.occupancyPct)}% full
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                        {info.availableER} ER beds free
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                        {info.waitMinutes}m wait
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* AI Reasoning */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400 mb-1">Why this hospital</p>
+              <p className="text-[0.8rem] text-slate-700 leading-relaxed">
+                {selectedCase.assignedHospital?.reason || selectedCase.triage.reasoning}
+              </p>
+              {(selectedCase.triage.predictedNeeds?.length ?? 0) > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {selectedCase.triage.predictedNeeds.map((need: string) => (
-                    <span key={need} className="text-[0.65rem] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-bold">{need}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4">
-              <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400 mb-2">Explainability</p>
-              {scoreRows.length ? (
-                <div className="grid grid-cols-2 gap-2 text-[0.72rem]">
-                  {scoreRows.map(([label, value]) => (
-                    <div key={String(label)} className="flex items-center justify-between bg-white border border-slate-200 rounded px-2 py-1">
-                      <span className="text-slate-500 font-semibold">{label}</span>
-                      <span className="text-slate-800 font-bold">{Number(value).toFixed(1)}</span>
-                    </div>
-                  ))}
-                  <div className="col-span-2 flex items-center justify-between bg-sky-50 border border-sky-200 rounded px-2 py-1.5">
-                    <span className="text-sky-700 font-bold">Total Score</span>
-                    <span className="text-sky-900 font-black">{selectedCase.assignedHospital?.scoreBreakdown?.total?.toFixed?.(1) ?? selectedCase.assignedHospital?.score}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-500">Score breakdown is unavailable for this case. New incoming cases will include it.</p>
-              )}
-            </div>
-
-            <div className="mb-6">
-              <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400 mb-2">Original Message</p>
-              <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm text-sm text-slate-800">
-                {selectedCase.patientMessage}
-              </div>
-            </div>
-
-            <div className="mb-4 border-t border-slate-100 pt-4">
-              <h4 className="text-[0.8rem] font-bold uppercase tracking-widest text-slate-600 mb-3">Re-Route Alternatives</h4>
-              {routeOptionsLoading && (
-                <p className="text-[0.7rem] text-slate-500 mb-2">Computing options for active constraints...</p>
-              )}
-              {recommendedOption && (
-                <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <p className="text-[0.62rem] font-bold uppercase tracking-wider text-emerald-700 mb-1">Best match for current filters</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[0.8rem] font-bold text-emerald-900">{recommendedOption.hospital.name}</p>
-                    <button
-                      onClick={async () => {
-                        setIsOverriding(true);
-                        await onOverrideSubmit(selectedCase.caseId, recommendedOption);
-                        setIsOverriding(false);
-                      }}
-                      disabled={isOverriding}
-                      className="text-[0.68rem] font-bold bg-emerald-200 hover:bg-emerald-300 text-emerald-900 px-2 py-1 rounded-md"
-                    >
-                      Set Target
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="flex flex-col gap-3">
-                {visibleAlternatives.map((alt) => {
-                  const altInfo = getHospitalInfo(alt.hospital.id);
-                  return (
-                    <div key={alt.hospital.id} className="flex flex-col gap-2 border border-slate-200 hover:border-sky-300 transition-colors rounded-xl p-3 bg-white shadow-sm">
-                      <div className="flex justify-between items-start">
-                        <span className="text-sm font-bold text-slate-800 leading-tight">{alt.hospital.name}</span>
-                        <span className="text-[0.75rem] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md self-start">{alt.totalEstimatedMinutes} min</span>
-                      </div>
-                      <p className="text-[0.7rem] text-slate-500">{alt.reason}</p>
-
-                      {/* Bed & Occ info for alternative */}
-                      {altInfo && (
-                        <div className="flex items-center gap-2 mt-1 mb-1 border-t border-slate-100 pt-2">
-                          <div className="text-[0.65rem] font-medium bg-slate-50 px-1.5 py-0.5 rounded text-slate-600">
-                            Occ: <span className={altInfo.occupancyPct > 80 ? 'text-red-500 font-bold' : ''}>{Math.round(altInfo.occupancyPct)}%</span>
-                          </div>
-                          <div className="text-[0.65rem] font-medium bg-slate-50 px-1.5 py-0.5 rounded text-slate-600">
-                            ER Beds: <span className={altInfo.availableER < 3 ? 'text-red-500 font-bold' : ''}>{altInfo.availableER}</span>
-                          </div>
-                          <div className="text-[0.65rem] font-medium bg-slate-50 px-1.5 py-0.5 rounded text-slate-600">
-                            Wait: {altInfo.waitMinutes}m
-                          </div>
-                        </div>
-                      )}
-
-                      <button
-                        onClick={async () => {
-                          setIsOverriding(true);
-                          await onOverrideSubmit(selectedCase.caseId, alt);
-                          setIsOverriding(false);
-                        }}
-                        disabled={isOverriding}
-                        className="mt-1 w-full civ-btn civ-btn--ghost py-1.5 text-[0.75rem] bg-sky-50/50 hover:bg-sky-100/50 border-sky-100 text-sky-700"
-                      >
-                        Override to here
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="mb-4 border-t border-slate-100 pt-4">
-              <h4 className="text-[0.8rem] font-bold uppercase tracking-widest text-slate-600 mb-3">Twist 2 Monitor Test</h4>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <label className="text-[0.68rem] font-bold text-slate-600 uppercase tracking-wide">
-                    Baseline ETA
-                    <input
-                      type="number"
-                      min={1}
-                      value={baselineEta}
-                      onChange={(e) => setBaselineEta(Number(e.target.value || 0))}
-                      className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 text-[0.75rem]"
-                    />
-                  </label>
-                  <label className="text-[0.68rem] font-bold text-slate-600 uppercase tracking-wide">
-                    Current ETA
-                    <input
-                      type="number"
-                      min={1}
-                      value={currentEta}
-                      onChange={(e) => setCurrentEta(Number(e.target.value || 0))}
-                      className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-1 text-[0.75rem]"
-                    />
-                  </label>
-                </div>
-
-                <label className="flex items-center gap-2 text-[0.72rem] font-bold text-rose-700 uppercase tracking-wide mb-2">
-                  <input
-                    type="checkbox"
-                    checked={roadClosure}
-                    onChange={(e) => setRoadClosure(e.target.checked)}
-                  />
-                  Simulate Road Closure
-                </label>
-
-                <button
-                  onClick={async () => {
-                    if (!selectedCase) return;
-                    setMonitorBusy(true);
-                    setMonitorMessage(null);
-                    try {
-                      const result = await onMonitorPing(
-                        selectedCase.caseId,
-                        baselineEta,
-                        currentEta,
-                        roadClosure,
-                      );
-
-                      if (result?.rerouted) {
-                        setMonitorMessage(`Auto-rerouted to ${result.rerouteHospitalName ?? 'fallback hospital'}`);
-                      } else if (result?.closureDetected) {
-                        setMonitorMessage(`Closure detected (${result.reason}) but no reroute candidate found`);
-                      } else {
-                        setMonitorMessage('No closure trigger detected');
-                      }
-                    } catch {
-                      setMonitorMessage('Monitor ping failed');
-                    } finally {
-                      setMonitorBusy(false);
-                    }
-                  }}
-                  disabled={monitorBusy}
-                  className="w-full text-[0.72rem] font-bold uppercase tracking-wide bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 px-2 py-1.5 rounded-lg"
-                >
-                  {monitorBusy ? 'Checking...' : 'Run Monitor Ping'}
-                </button>
-
-                {monitorMessage && (
-                  <p className="mt-2 text-[0.72rem] text-slate-700 font-semibold">{monitorMessage}</p>
-                )}
-              </div>
-            </div>
-
-          </div>
-        ) : (
-          cases.map(c => (
-            <div
-              key={c.caseId}
-              onClick={() => onCaseSelect(c)}
-              className={`civ-hospital-card civ-hospital-card--top cursor-pointer group hover:bg-slate-50 transition-all hover:scale-[1.01] ${c.incidentId ? 'border-amber-200 bg-amber-50/30' : ''}`}
-            >
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <span className={`civ-badge ${c.triage.severity === 'critical' ? 'bg-red-100 text-red-700' : 'civ-badge--sky'}`}>
-                    {c.triage.severity}
-                  </span>
-                  {c.incidentId && (
-                    <span className="ml-1.5 text-[0.65rem] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded shadow-sm">
-                      MCI
+                    <span key={need} className="text-[0.62rem] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-bold uppercase tracking-wide">
+                      {need}
                     </span>
-                  )}
-                  <span className={`ml-1.5 text-[0.6rem] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${ackBadge(c.hospitalAck?.status)}`}>
-                    {ackLabel(c.hospitalAck?.status)}
-                  </span>
-                  <div className="text-sm font-bold text-slate-800 tracking-tight mt-0.5">{c.caseId}</div>
+                  ))}
                 </div>
-                <div className="text-[0.65rem] text-slate-400 font-medium">
-                  {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-              <p className="text-[0.75rem] text-slate-600 line-clamp-1 mb-2">&quot;{c.patientMessage}&quot;</p>
-              <div className="flex justify-between items-end border-t border-slate-100 pt-2">
-                <span className="text-[0.7rem] font-bold text-sky-700">&rarr; {c.assignedHospital?.hospital?.name}</span>
-                <span className="text-[0.8rem] font-bold text-slate-800 bg-slate-100 px-1.5 rounded">{c.assignedHospital?.totalEstimatedMinutes}m</span>
-              </div>
+              )}
             </div>
-          ))
+
+            {/* Alternatives */}
+            {(selectedCase.alternatives as ScoredHospital[])?.length > 0 && (
+              <div>
+                <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400 mb-2 mt-1">Alternatives</p>
+                <div className="flex flex-col gap-2">
+                  {(selectedCase.alternatives as ScoredHospital[]).slice(0, 3).map((alt) => {
+                    const altInfo = getHospitalInfo(alt.hospital?.id);
+                    return (
+                      <div key={alt.hospital?.id} className="bg-white border border-slate-200 hover:border-sky-300 transition-colors rounded-xl p-3 shadow-sm">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-sm font-bold text-slate-800">{alt.hospital?.name}</span>
+                          <span className="text-[0.72rem] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md">{alt.totalEstimatedMinutes} min</span>
+                        </div>
+                        {altInfo && (
+                          <div className="flex gap-1.5 text-[0.65rem] mb-2">
+                            <span className={`px-1.5 py-0.5 rounded font-semibold ${altInfo.occupancyPct > 80 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                              {Math.round(altInfo.occupancyPct)}% full
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold">
+                              {altInfo.availableER} ER free
+                            </span>
+                          </div>
+                        )}
+                        <button
+                          onClick={async () => {
+                            setIsOverriding(true);
+                            await onOverrideSubmit(selectedCase.caseId, alt);
+                            setIsOverriding(false);
+                          }}
+                          disabled={isOverriding}
+                          className="w-full text-[0.72rem] font-bold py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 transition-colors disabled:opacity-50"
+                        >
+                          {isOverriding ? 'Overriding...' : 'Override to here'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+        ) : (
+          /* ── CASE LIST VIEW ── */
+          <>
+            {cases.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                  <span className="text-lg">🏥</span>
+                </div>
+                <p className="text-sm text-slate-500 font-medium">No active cases</p>
+                <p className="text-[0.72rem] text-slate-400 mt-1">Cases will appear here when received via WhatsApp</p>
+              </div>
+            )}
+            {cases.map(c => (
+              <div
+                key={c.caseId}
+                onClick={() => onCaseSelect(c)}
+                className={`civ-hospital-card civ-hospital-card--top cursor-pointer hover:bg-slate-50 transition-all hover:scale-[1.01] active:scale-[0.99] ${c.incidentId ? 'border-l-4 border-l-amber-400' : ''}`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`civ-badge ${SEVERITY_COLOR[c.triage.severity] ?? ''}`}>
+                      {c.triage.severity}
+                    </span>
+                    {c.incidentId && (
+                      <span className="text-[0.62rem] font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
+                        MCI
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[0.65rem] text-slate-400 font-medium">
+                    {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+
+                <p className="text-sm font-bold text-slate-800 mb-1">{c.caseId}</p>
+                <p className="text-[0.75rem] text-slate-500 line-clamp-1 mb-2 italic">&ldquo;{c.patientMessage}&rdquo;</p>
+
+                <div className="flex justify-between items-center border-t border-slate-100 pt-2">
+                  <span className="text-[0.72rem] font-bold text-sky-700">
+                    → {c.assignedHospital?.hospital?.name ?? 'Routing...'}
+                  </span>
+                  <span className="text-[0.8rem] font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                    {c.assignedHospital?.totalEstimatedMinutes}m
+                  </span>
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>

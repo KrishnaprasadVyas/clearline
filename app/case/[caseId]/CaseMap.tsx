@@ -14,13 +14,14 @@ export default function CaseMap({ caseData }: { caseData: EmergencyCase }) {
     if (!containerRef.current) return;
 
     const { lat: uLat, lng: uLng } = caseData.userLocation;
-    const hosp = caseData.assignedHospital?.hospital;
-    const routeGeometry = caseData.assignedHospital?.routeGeometry;
+    const ah = caseData.assignedHospital as any;
+    const hosp = ah?.hospital;
+    const routeGeometry = ah?.routeGeometry;
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
       // navigation-night-v1 requests the legacy incidents tileset that returns 404 for some tokens.
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/light-v11',
       center: [uLng, uLat],
       zoom: 12,
       pitch: 40,

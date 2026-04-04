@@ -13,21 +13,25 @@ export async function GET(req: NextRequest) {
 
     const filtered = liveCases
       .filter((c) => {
-        const assignedHospitalId = c.assignedHospital?.hospital?.id;
+        const ah = c.assignedHospital as any;
+        const assignedHospitalId = ah?.hospital?.id;
         if (hospitalId && assignedHospitalId !== hospitalId) return false;
         if (ackStatus && c.hospitalAck?.status !== ackStatus) return false;
         return true;
       })
-      .map((c) => ({
-        caseId: c.caseId,
-        severity: c.triage?.severity,
-        status: c.status,
-        hospitalAckStatus: c.hospitalAck?.status ?? 'pending',
-        hospitalName: c.assignedHospital?.hospital?.name ?? 'Unknown Hospital',
-        hospitalId: c.assignedHospital?.hospital?.id,
-        updatedAt: c.updatedAt,
-        createdAt: c.createdAt,
-      }))
+      .map((c) => {
+        const ah = c.assignedHospital as any;
+        return {
+          caseId: c.caseId,
+          severity: c.triage?.severity,
+          status: c.status,
+          hospitalAckStatus: c.hospitalAck?.status ?? 'pending',
+          hospitalName: ah?.hospital?.name ?? 'Unknown Hospital',
+          hospitalId: ah?.hospital?.id,
+          updatedAt: c.updatedAt,
+          createdAt: c.createdAt,
+        };
+      })
       .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
 
     const counts = {

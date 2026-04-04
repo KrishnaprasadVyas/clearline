@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const defaultBaseline = Number(emergencyCase.assignedHospital?.totalEstimatedMinutes ?? 20);
+    const ah = emergencyCase.assignedHospital as any;
+    const defaultBaseline = Number(ah?.totalEstimatedMinutes ?? 20);
     const defaultCurrent = Number(
-      (emergencyCase.assignedHospital?.drivingTimeMinutes ?? defaultBaseline) +
-        (emergencyCase.assignedHospital?.waitMinutes ?? 0),
+      (ah?.drivingTimeMinutes ?? defaultBaseline) +
+        (ah?.waitMinutes ?? 0),
     );
 
     const effectiveBaseline = baselineEtaMinutes ?? defaultBaseline;
