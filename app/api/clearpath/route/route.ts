@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
       body.severity,
       hospitals,
       snapshots,
-      body.symptoms
+      body.symptoms,
+      body.predictedNeeds,
+      body.imageSeverity,
+      body.constraints,
     );
 
     if (!result) {

@@ -3,13 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000 -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "bot": "tsx scripts/runWhatsappBot.ts",
+    "bot:dev": "tsx watch scripts/runWhatsappBot.ts",
+    "backfill:level1": "ts-node --esm --project tsconfig.json scripts/backfillLevel1TraumaFlag.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@react-three/drei": "^10.7.7",
+    "@tensorflow-models/mobilenet": "^2.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
     "@turf/along": "^7.3.4",
     "@turf/bearing": "^7.3.4",
     "@turf/length": "^7.3.4",
@@ -22,12 +28,16 @@
     "lucide-react": "^1.7.0",
     "mapbox-gl": "^3.21.0",
     "mongodb": "^6.10.0",
+    "nanoid": "^5.1.7",
     "next": "16.2.2",
     "openai": "^6.33.0",
+    "qrcode-terminal": "^0.12.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "swr": "^2.4.1",
     "tailwind-merge": "^2.5.4",
     "three": "^0.183.2",
+    "whatsapp-web.js": "^1.34.6",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -38,6 +48,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
